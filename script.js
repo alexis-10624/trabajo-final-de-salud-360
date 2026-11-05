@@ -1,14 +1,44 @@
-/**
- * Salud 360 - Lógica de interacciones (Pública / Privada)
- */
+// script.js - Lógica principal del Frontend para Salud 360
 
 let usuarioAutenticado = false;
-let nombreUsuarioActual = "Alexis Restrepo";
+let nombreUsuarioActual = "";
+
+document.addEventListener('DOMContentLoaded', () => {
+    const formLogin = document.getElementById('formLogin');
+    const formRegistro = document.getElementById('formRegistro');
+    
+    if (formLogin) formLogin.reset();
+    if (formRegistro) formRegistro.reset();
+
+    // Verificamos si ya hay una sesión activa guardada en localStorage (Persistencia al recargar)
+    const sesionGuardada = localStorage.getItem('sesionActivaSalud360');
+    if (sesionGuardada) {
+        const datosUsuario = JSON.parse(sesionGuardada);
+        usuarioAutenticado = true;
+        nombreUsuarioActual = datosUsuario.nombre;
+        
+        actualizarInterfazAutenticada();
+        cambiarSeccion('dashboard');
+    } else {
+        const userInfoHeader = document.getElementById('userInfoHeader');
+        const sidebarNav = document.getElementById('sidebarNav');
+
+        if (userInfoHeader) {
+            userInfoHeader.classList.add('hidden');
+            userInfoHeader.classList.remove('flex');
+        }
+        if (sidebarNav) {
+            sidebarNav.classList.add('hidden');
+        }
+        cambiarSeccion('home');
+    }
+
+    console.log("Salud 360 - Frontend inicializado correctamente");
+});
 
 function cambiarSeccion(seccionId) {
     const secciones = ['home', 'dashboard', 'citas', 'tramites', 'resultados', 'pagos', 'directorio', 'calificacion', 'auth'];
     
-    // Restricción de secciones privadas
     const seccionesPrivadas = ['dashboard', 'citas', 'tramites', 'resultados', 'pagos', 'calificacion'];
     if (seccionesPrivadas.includes(seccionId) && !usuarioAutenticado) {
         mostrarModal("Acceso Restringido", "Debes iniciar sesión con tu cuenta para acceder a los servicios de salud.");
@@ -39,58 +69,140 @@ function cambiarSeccion(seccionId) {
     }
 }
 
+// --- LOGIN SEGURO CON PERSISTENCIA ---
 function iniciarSesion(e) {
     e.preventDefault();
-    const email = document.getElementById('loginEmail').value;
-    
-    usuarioAutenticado = true;
-    nombreUsuarioActual = email.split('@')[0];
-    
-    actualizarInterfazAutenticada();
-    mostrarModal("Bienvenido de nuevo", `Has ingresado como ${nombreUsuarioActual}.`);
-    cambiarSeccion('dashboard');
+    const emailInput = document.getElementById('loginEmail');
+    const passwordInput = document.getElementById('loginPassword');
+
+    const email = emailInput ? emailInput.value.trim() : "";
+    const password = passwordInput ? passwordInput.value.trim() : "";
+
+    const usuariosRegistrados = JSON.parse(localStorage.getItem('usuariosSalud360')) || [];
+    const usuarioEncontrado = usuariosRegistrados.find(u => u.correo === email && u.password === password);
+
+    if (usuarioEncontrado) {
+        usuarioAutenticado = true;
+        nombreUsuarioActual = usuarioEncontrado.nombre;
+        
+        // Guardamos la sesión activa en localStorage para que persista al recargar la página
+        localStorage.setItem('sesionActivaSalud360', JSON.stringify({ nombre: nombreUsuarioActual, correo: email }));
+
+        actualizarInterfazAutenticada();
+        mostrarModal("Bienvenido de nuevo", `Has ingresado como ${nombreUsuarioActual}.`);
+        cambiarSeccion('dashboard');
+    } else {
+        mostrarModal("Error de Autenticación", "Correo o contraseña incorrectos. Por favor, verifica tus datos o regístrate si no tienes cuenta.");
+    }
 }
 
+// --- REGISTRO SEGURO CON PERSISTENCIA ---
 function registrarUsuario(e) {
     e.preventDefault();
-    const nombre = document.getElementById('regNombre').value;
     
+    const nombreInput = document.getElementById('regNombre');
+    const tipoDocInput = document.getElementById('regTipoDoc');
+    const numDocInput = document.getElementById('regNumDoc');
+    const emailInput = document.getElementById('regEmail');
+    const telefonoInput = document.getElementById('regTelefono');
+    const passwordInput = document.getElementById('regPassword');
+
+    const nombre = nombreInput ? nombreInput.value.trim() : "";
+    const tipoDoc = tipoDocInput ? tipoDocInput.value : "";
+    const numDoc = numDocInput ? numDocInput.value.trim() : "";
+    const correo = emailInput ? emailInput.value.trim() : "";
+    const telefono = telefonoInput ? telefonoInput.value.trim() : "";
+    const password = passwordInput ? passwordInput.value.trim() : "";
+
+    if (!nombre || !numDoc || !correo || !telefono || !password) {
+        mostrarModal("Campos Incompletos", "Por favor, completa todos los campos obligatorios para crear tu cuenta.");
+        return;
+    }
+
+    let usuariosRegistrados = JSON.parse(localStorage.getItem('usuariosSalud360')) || [];
+
+    const existeCorreo = usuariosRegistrados.some(u => u.correo === correo);
+    if (existeCorreo) {
+        mostrarModal("Correo ya registrado", "Este correo electrónico ya se encuentra asociado a una cuenta. Intenta iniciar sesión.");
+        return;
+    }
+
+    const nuevoUsuario = {
+        nombre: nombre,
+        tipoDoc: tipoDoc,
+        numDoc: numDoc,
+        correo: correo,
+        telefono: telefono,
+        password: password
+    };
+
+    usuariosRegistrados.push(nuevoUsuario);
+    localStorage.setItem('usuariosSalud360', JSON.stringify(usuariosRegistrados));
+
     usuarioAutenticado = true;
-    nombreUsuarioActual = nombre || "Alexis Restrepo";
+    nombreUsuarioActual = nombre;
     
+    // Guardamos la sesión activa tras el registro
+    localStorage.setItem('sesionActivaSalud360', JSON.stringify({ nombre: nombreUsuarioActual, correo: correo }));
+
     actualizarInterfazAutenticada();
-    mostrarModal("¡Registro Exitoso!", "Tu cuenta ha sido creada y has iniciado sesión correctamente.");
+    mostrarModal("¡Registro Exitoso!", `Tu cuenta ha sido creada correctamente, ${nombreUsuarioActual}. ¡Bienvenido!`);
     cambiarSeccion('dashboard');
 }
 
 function cerrarSesion() {
     usuarioAutenticado = false;
-    const sidebar = document.getElementById('sidebarNav');
-    sidebar.classList.add('hidden');
-    sidebar.classList.remove('md:block');
+    nombreUsuarioActual = "";
     
-    document.getElementById('userInfoHeader').classList.add('hidden');
+    // Borramos la sesión activa del almacenamiento local
+    localStorage.removeItem('sesionActivaSalud360');
+    
+    const userInfoHeader = document.getElementById('userInfoHeader');
+    if (userInfoHeader) {
+        userInfoHeader.classList.add('hidden');
+        userInfoHeader.classList.remove('flex');
+    }
+
+    const sidebarNav = document.getElementById('sidebarNav');
+    if (sidebarNav) {
+        sidebarNav.classList.add('hidden');
+    }
     
     const btnAuth = document.getElementById('btnAuthHeader');
-    btnAuth.textContent = "Iniciar Sesión / Registro";
-    btnAuth.onclick = function() { cambiarSeccion('auth'); };
+    if (btnAuth) {
+        btnAuth.textContent = "Iniciar Sesión / Registro";
+        btnAuth.onclick = function() { cambiarSeccion('auth'); };
+        btnAuth.className = "bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition";
+    }
     
     mostrarModal("Sesión Finalizada", "Has salido del portal de afiliados correctamente.");
     cambiarSeccion('home');
 }
 
 function actualizarInterfazAutenticada() {
-    const sidebar = document.getElementById('sidebarNav');
-    sidebar.classList.remove('hidden');
-    sidebar.classList.add('md:block');
+    const userInfoHeader = document.getElementById('userInfoHeader');
+    if (userInfoHeader) {
+        userInfoHeader.classList.remove('hidden');
+        userInfoHeader.classList.add('flex');
+    }
+
+    const sidebarNav = document.getElementById('sidebarNav');
+    if (sidebarNav) {
+        sidebarNav.classList.remove('hidden');
+    }
+
+    const headerUserName = document.getElementById('headerUserName');
+    const dashUserName = document.getElementById('dashUserName');
     
-    document.getElementById('userInfoHeader').classList.remove('hidden');
-    document.getElementById('headerUserName').textContent = nombreUsuarioActual;
-    document.getElementById('dashUserName').textContent = nombreUsuarioActual;
+    if (headerUserName) headerUserName.textContent = nombreUsuarioActual;
+    if (dashUserName) dashUserName.textContent = nombreUsuarioActual;
     
     const btnAuth = document.getElementById('btnAuthHeader');
-    btnAuth.textContent = "Ir a mi Panel";
-    btnAuth.onclick = function() { cambiarSeccion('dashboard'); };
+    if (btnAuth) {
+        btnAuth.textContent = "Ir a mi Panel";
+        btnAuth.onclick = function() { cambiarSeccion('dashboard'); };
+        btnAuth.className = "bg-sky-600 hover:bg-sky-700 text-white px-4 py-2 rounded-lg text-sm font-medium transition";
+    }
 }
 
 function agendarCita(e) {
@@ -103,13 +215,6 @@ function agendarCita(e) {
     cambiarSeccion('dashboard');
 }
 
-function confirmarCancelacion(btn) {
-    if (confirm("¿Estás seguro de que deseas cancelar esta cita?")) {
-        btn.parentElement.remove();
-        mostrarModal("Cita Cancelada", "El cupo ha sido liberado exitosamente.");
-    }
-}
-
 function descargarCertificado() {
     mostrarModal("Descarga Exitosa", "Su certificado de afiliación en PDF ha sido generado y descargado correctamente.");
 }
@@ -117,7 +222,7 @@ function descargarCertificado() {
 function mostrarArchivoCargado() {
     const input = document.getElementById('ordenMedica');
     const nombre = document.getElementById('nombreArchivo');
-    if (input.files.length > 0) {
+    if (input && input.files.length > 0 && nombre) {
         nombre.textContent = `✔ Archivo adjunto: ${input.files[0].name}`;
     }
 }
@@ -131,7 +236,10 @@ function simularPagoPSE() {
 }
 
 function calificar(estrellas) {
-    document.getElementById('mensajeCalificacion').textContent = `Has seleccionado ${estrellas} de 5 estrellas. ¡Gracias por tu opinión!`;
+    const mensajeCalificacion = document.getElementById('mensajeCalificacion');
+    if (mensajeCalificacion) {
+        mensajeCalificacion.textContent = `Has seleccionado ${estrellas} de 5 estrellas. ¡Gracias por tu opinión!`;
+    }
 }
 
 function enviarCalificacion() {
@@ -146,24 +254,29 @@ function cambiarTabAuth(tab) {
     const tabRegistro = document.getElementById('tab-registro');
 
     if (tab === 'login') {
-        formLogin.classList.remove('hidden');
-        formRegistro.classList.add('hidden');
-        tabLogin.className = "flex-1 pb-2 font-bold text-sm text-sky-600 border-b-2 border-sky-600";
-        tabRegistro.className = "flex-1 pb-2 font-bold text-sm text-slate-400";
+        if (formLogin) formLogin.classList.remove('hidden');
+        if (formRegistro) formRegistro.classList.add('hidden');
+        if (tabLogin) tabLogin.className = "flex-1 pb-2 font-bold text-sm text-sky-600 border-b-2 border-sky-600";
+        if (tabRegistro) tabRegistro.className = "flex-1 pb-2 font-bold text-sm text-slate-400";
     } else {
-        formLogin.classList.add('hidden');
-        formRegistro.classList.remove('hidden');
-        tabRegistro.className = "flex-1 pb-2 font-bold text-sm text-sky-600 border-b-2 border-sky-600";
-        tabLogin.className = "flex-1 pb-2 font-bold text-sm text-slate-400";
+        if (formLogin) formLogin.classList.add('hidden');
+        if (formRegistro) formRegistro.classList.remove('hidden');
+        if (tabRegistro) tabRegistro.className = "flex-1 pb-2 font-bold text-sm text-sky-600 border-b-2 border-sky-600";
+        if (tabLogin) tabLogin.className = "flex-1 pb-2 font-bold text-sm text-slate-400";
     }
 }
 
 function mostrarModal(titulo, mensaje) {
-    document.getElementById('modalTitulo').textContent = titulo;
-    document.getElementById('modalMensaje').textContent = mensaje;
-    document.getElementById('modalAlert').classList.remove('hidden');
+    const modalTitulo = document.getElementById('modalTitulo');
+    const modalMensaje = document.getElementById('modalMensaje');
+    const modalAlert = document.getElementById('modalAlert');
+
+    if (modalTitulo) modalTitulo.textContent = titulo;
+    if (modalMensaje) modalMensaje.textContent = mensaje;
+    if (modalAlert) modalAlert.classList.remove('hidden');
 }
 
 function cerrarModal() {
-    document.getElementById('modalAlert').classList.add('hidden');
+    const modalAlert = document.getElementById('modalAlert');
+    if (modalAlert) modalAlert.classList.add('hidden');
 }
